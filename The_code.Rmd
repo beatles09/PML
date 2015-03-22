@@ -1,0 +1,57 @@
+---
+title: "Practical Machine Learning:Course Project"
+output: html_document
+---
+###This code has been written to perform the given task on the data provided to me in a report using a single R markdown document that can be processed by knitr and be transformed into an HTML file.Since the data set has such a great size and we need make a class prediction, random forests model is implemented. The test set error is estimated internally, during the execution. So, we proceed with the training the model (Random Forest) with the training data set. Further details are mentioned in the code. The parallel package provides functions for parallel execution of R code on machines with multiple cores or processors or multiple computers. It is essentially a blend of the snow and multicore packages. By default, the doParallel package uses snow-like functionality. The snow-like functionality should work fine on Unix-like systems. The error obtained is really low which is favourable in this case.
+
+```{r}
+library(Hmisc)
+library(caret)
+library(randomForest)
+library(foreach)
+library(doParallel)
+set.seed(123)
+td <- read.csv("pml-training.csv", na.strings=c("#DIV/0!") )
+ed <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!") )
+for(i in c(8:ncol(td)-1)) {td[,i] = as.numeric(as.character(td[,i]))}
+
+for(i in c(8:ncol(ed)-1)) {ed[,i] = as.numeric(as.character(ed[,i]))}
+sets <- colnames(td[colSums(is.na(td)) == 0])[-(1:7)]
+model <- td[sets]
+sets
+#The function createDataPartition can be used to create a stratified random sample of the data into training and validation sets with 75% of the data in the training set and the rest in the test/validation set
+parts <- createDataPartition(y=model$classe, p=0.75, list=FALSE )
+training <- model[parts,]
+testing <- model[-parts,]
+registerDoParallel() #Parallel processing along with randomForest provides great speed.
+x <- training[-ncol(training)]
+y <- training$classe
+
+rf <- foreach(ntree=rep(150, 6), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree,importance = TRUE) 
+}
+print(randomForest)
+print(rf)
+# Few lines of code that provide error reports for both training and test data.
+predict_training <- predict(rf, newdata=training)
+confusionMatrix(predict_training,training$classe)
+
+
+predict_testing <- predict(rf, newdata=testing)
+confusionMatrix(predict_testing,testing$classe)
+
+x <- ed
+x <- x[sets[sets!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
